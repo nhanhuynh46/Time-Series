@@ -1,0 +1,171 @@
+---
+title: "Lab 2"
+author: "Pstat 174/274"
+date: "October 9,2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+# include=FALSE: the chunk of code is evaluated, but neither the code or its output is displayed (only for this current chunk)
+knitr::opts_chunk$set(echo = TRUE) 
+# globally, set echo=TRUE --> display both R code and the output
+```
+
+# Characteristics of Time Series
+
+(1) **White noise**. Simulate and plot $n = 200$ values of a Gaussian white-noise process with variance $\sigma_{Z}^{2} = 1$, i.e., $X_{t} = Z_{t}$, where $Z_{t} \overset{iid}{\sim} \mathcal{N}(0,\sigma_{Z}^{2})$.
+
+
+```{r}
+# simulate white noise from normal distribution with mean 0 and variance 1
+z_t <- rnorm(200,0,1)
+plot(z_t,xlab = "t",ylab = expression(z[t]),type = "l",main = "White Noise")
+```
+
+
+(2) **Moving averages**. Using the above gaussian process $x_{t}$, use the  `filter` command to construct a moving average process of the form:
+\[
+y_{t} = (x_{t-1} + x_{t} + x_{t+1})/3
+\]
+(notice that for this example the current value of $y_{t}$ is the average of the previous, current and next values of $x_{t}$). Then, plot $y_{t}$ and $x_{t}$ together with different colors. Do you observe any difference? 
+
+```{r}
+# See help for filter
+?filter
+# for explanation of what filter function does in R:
+# https://stat.ethz.ch/pipermail/r-help/2008-August/170489.html
+y_t = filter(z_t, filter = rep(1/3,3), sides = 2, method = "convolution")
+# argument method: convulation to use moving average
+
+# Plot of white-noise
+plot(z_t,xlab = "t",ylab = expression(X[t]),type = "l",main = "Moving Average")
+# Plot of moving-average
+lines(y_t,col = "blue")
+# Add legend
+legend("topright",c("WN", "Moving Avg."),col = c("black","blue"),lty = 1)
+```
+
+(3) **Signal in noise**. Consider a signal-plus-noise model of the general form $x_t = s_t + z_t$; where $s_{t}$ is regarded as the signal and $z_t$ is Gaussian white noise with $\sigma_{Z}^{2} = 1$. Simulate and plot $n = 200$ observations using 
+
+\[
+s_{t} = \left\{
+\begin{array}{ll}
+0 & \mbox{if $t = 1,\ldots,100$;} \\
+10 \exp\{-\frac{(t-100)}{20}\} \cos(2\pi t /4) & \mbox{if $t = 101,\ldots,200$.}
+\end{array}
+\right.
+\]
+
+
+```{r}
+s_t <- c(rep(0,100), 10*exp(-(1:100)/20)*cos(2*pi*1:100/4))
+x_t <- ts(s_t + rnorm(200, 0, 1))
+# Plot of time series
+plot(x_t, xlab  = "t",ylab  = expression(x[t]),type = "l", main = "Signal plus noise")
+# Add signal
+lines(ts(s_t),col = "blue")
+
+```
+
+(4) **Autoregressions**. Suppose we consider the white noise series in (1) as input and calculate the output using the equation
+\[
+x_t = x_{t-1} - 0.9x_{t-2} + z_t, \ z_{t} \overset{iid}{\sim} \mathcal{N}(0,1)
+\]
+successively. The series $x_{t}$ represents a regression or prediction of the current value $x_t$ of a time series as a function of the past two values of the series, and, hence, the term autoregression is suggested.
+Simulate and plot the autorregressive process using `filter`.
+
+```{r}
+x_t <- filter(z_t,filter = c(1,-0.9),method = "recursive")
+plot(x_t,xlab  = "t",ylab  = expression(x[t]),type = "l", main = "Autoregressive Model")
+```
+
+<!-- One way to simulate and plot data from the model (1.2) in R is to use the following commands (another way is to use arima.sim). -->
+<!-- 1 w = rnorm(550,0,1) # 50 extra to avoid startup problems -->
+<!-- 2 x = filter(w, filter=c(1,-.9), method="recursive")[-(1:50)] -->
+<!-- 3 plot.ts(x, main="autoregression") -->
+
+
+(5) **Random Walk Process**.
+
+	a. Show that the random walk 
+\[
+	X_{t} = \delta + X_{t-1} + Z_{t}, \ Z_{t} \overset{iid}{\sim} WN(0,\sigma_{Z}^{2})
+\] 
+can be re-written as the cumulative sum of white noise variates: $X_{t} = \delta t + \sum_{j = 1}^{t}Z_{j}$.
+
+Hint: keep expanding $X_t$ using the original equation.
+
+	b. Simulate $n = 200$ observations of a random-walk with *drift* $\delta = 0.6, 0.4$; initial condition $x_{0} = 0$ and $\sigma^{2}_{Z} = 1$. Then, plot both realizations using different colors.
+	
+	c. Is the random-walk with drift $\delta$ a (weakly) stationary process?
+
+```{r}
+z_t <- rnorm(499,0,1)
+x_t <- c(0,cumsum(z_t))
+rw1 <- 1:500*0.6 + x_t
+rw2 <- 1:500*0.4 + x_t
+plot(rw1,type = "l",xlab = "t",ylab = expression(x[t]),
+		 main = "Random Walk")
+lines(rw2,col = "blue",type = "l")
+```
+
+# Measures of Dependence of a Time Series
+
+(6) Consider an MA(2) process, given by
+
+\[
+X_t = Z_t + \theta_{1}Z_{t-1} + \theta_{2}Z_{t-2},\ \mbox{where $Z_t \overset{iid}{\sim} \mathcal{N}(0,1)$}.
+\]
+
+Using `R`, simulate a time series of length 100 from an MA(2) process with the following values
+of the coefficients:
+
+a. $\theta_{1} = 0.45, \theta_{2} = 0.55$
+
+b. $\theta_{1} = -0.45, \theta_{2} = 0.55$
+	
+For each simulated time series, plot the sample ACF using `acf` and the theoretical ACF. What do you notice?
+
+*Note*: The (theoretical) ACF of an MA(2), $\rho_{X}(k):=Corr(X_{t},X_{t+k})$, is given by
+	\[
+	\rho_{X}(k) = \left\{ 
+	\begin{array}{ll}
+	1 & \mbox{if $k = 0$}\\
+	\frac{\theta_{1} + \theta_{1}\theta_{2}}{1+\theta_{1}^{2}+\theta_{2}^{2}} & \mbox{if $|k| = 1$} \\
+		\frac{\theta_{2}}{1+\theta_{1}^{2}+\theta_{2}^{2}} & \mbox{if $|k| = 2$} \\
+			0 & \mbox{if $|k| > 2$} \\
+	\end{array}
+	\right.
+	\]
+	
+	
+```{r fig.height= 5, fig.width=10,results='hold'}
+# a
+theta_1 <- 0.45
+theta_2 <- 0.55
+var_ma <- 1+theta_1^2+theta_2^2
+
+# Simulate MA
+x1 <- arima.sim(n = 100,model = list(ma=c(theta_1,theta_2)))
+# Theoretical ACF
+theo_acf1 <- c(var_ma,(theta_1 + theta_1*theta_2),theta_2,rep(0,18))/var_ma
+
+# b
+theta_1 <- -0.45
+theta_2 <- 0.55
+var_ma <- 1+theta_1^2+theta_2^2
+x2 <- arima.sim(n = 100,model = list(ma=c(theta_1,theta_2)))
+theo_acf2 <- c(var_ma,(theta_1 + theta_1*theta_2),theta_2,rep(0,18))/var_ma
+
+# Plot both ACFs
+op <- par(mfrow = c(1,2))
+acf(x1,main = expression(theta[1] == 0.45~theta[2] == 0.55)) # Sample auto-correlation
+lines(x = 0:20,y = theo_acf1,col = "red") # Add theoretical ACF
+
+acf(x2,main = expression(theta[1] == -0.45~theta[2] == 0.55)) 
+lines(x = 0:20,y = theo_acf2,col = "red")
+par(op)
+```
+	
+
+
