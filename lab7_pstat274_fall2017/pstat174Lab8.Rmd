@@ -1,0 +1,162 @@
+---
+title: "Lab 8"
+author: "Pstat 174/274"
+date: "May 25, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,fig.show = "hold")
+```
+
+# Summary of `R` Commands 
+
+
+- To estimate parameters of an AR model:
+```{r eval = FALSE}
+ar(data, aic = TRUE, order.max = NULL, method = c("..."))
+```
+
+- To estimate parameters of an MA or ARMA model: 
+```{r eval = FALSE}
+arima(data, order = c(p, 0, q), method = c("..."))
+```
+
+- To compare models using AICC: 
+```{r eval = FALSE}
+AICc(fittedModel)
+```
+
+- To difference a time series at lag $d$:
+```{r eval = FALSE}      
+diff(data,lag = d)
+```
+
+- To predict future observations given a fitted ARMA model: 
+```{r eval = FALSE}      
+predict(fittedModel, number of future observations to forecast)
+```
+
+# Model Identification, Estimation and Diagnostics
+
+## Exploratory Data Analysis
+
+1. Analyze the Dow Jones Index data by downloading `dowj.txt` from Gauchospace. Move the file into `R`’s working directory and load the data set into R using the command `scan("dowj.txt")`.
+```{r echo=FALSE}
+# Set working directory
+#setwd("/Users/jzapata/Dropbox/Winter 17/TA 174-274/Labs")
+```
+
+```{r}
+# Load data
+dowj_data <- scan("dowj.txt")
+```
+
+2. Plot the time series. What do you notice?
+```{r}
+dowj <- ts(dowj_data)
+# Plot data
+ts.plot(dowj,main = "Dow Jones Index")
+```
+
+3. Make the data stationary. What procedures were used?
+```{r,fig.height=4,fig.width=8}
+op <- par(mfrow=c(1,2))
+acf(dowj)
+pacf(dowj)
+par(op)
+```
+
+```{r}
+dowj.diff <- diff(dowj,1)
+ts.plot(dowj.diff, main = "De-trended data")
+```
+
+## Model Identification
+
+4. Plot the ACF and PACF. What models do they suggest?
+```{r,fig.height=4,fig.width=8}
+op <- par(mfrow=c(1,2))
+acf(dowj.diff)
+pacf(dowj.diff)
+par(op)
+```
+
+## Model Estimation
+
+5. Fit the AR model suggested by the sample PACF and estimate the coefficients using Yule-Walker estimation.
+```{r}
+(fit.ar <- ar(dowj.diff, method="yw"))
+```
+
+6. Construct 95% confidence intervals for the estimated AR coefficients (Hint: obtain the asymptotic variance of the estimated coefficient from the fitted `ar()` object using `fittedObject$asy.var.coef`).
+```{r}
+# 95% CI for phi1
+ar1.se <- sqrt(fit.ar$asy.var.coef)
+c(fit.ar$ar - 1.96*ar1.se, fit.ar$ar + 1.96*1.96*ar1.se)
+```
+
+7. Fit different ARMA models using maximum likelihood estimation and compare the model fits using AICC (Hint: use `arima()` for estimation and `AICc()` in `library(qpcR)` for model comparison - you will need to install this package into `R` first). Which model is preferred?
+```{r, message=FALSE}
+library(qpcR)
+# Calculate AICc for ARMA models with p and q running from 0 to 5
+aiccs <- matrix(NA, nr = 6, nc = 6)
+dimnames(aiccs) = list(p=0:5, q=0:5)
+for(p in 0:5)
+{
+  for(q in 0:5)
+  {
+    aiccs[p+1,q+1] = AICc(arima(dowj.diff, order = c(p,0,q), method="ML"))
+  }
+}
+aiccs
+(aiccs==min(aiccs))
+```
+
+## Model Diagnostics
+
+8. Perform diagnostics on the chosen model fit. Do the residuals appear to be white noise? Are they normally distributed?
+
+```{r}
+# Pick AR(1) and perform residual analysis:
+fit = arima(dowj, order=c(1,1,0), method="ML")
+
+# Test for independence of residuals
+Box.test(residuals(fit), type="Ljung")
+# Test for normality of residuals
+shapiro.test(residuals(fit))
+```
+
+```{r,  fig.width=6, fig.height=4}
+ts.plot(residuals(fit),main = "Fitted Residuals")
+```
+
+```{r, fig.width=8, fig.height=7}
+par(mfrow=c(1,2),oma=c(0,0,2,0))
+# Plot diagnostics of residuals
+op <- par(mfrow=c(2,2))
+# acf
+acf(residuals(fit),main = "Autocorrelation")
+# pacf
+pacf(residuals(fit),main = "Partial Autocorrelation")
+# Histogram
+hist(residuals(fit),main = "Histogram")
+# q-q plot
+qqnorm(residuals(fit))
+qqline(residuals(fit),col ="blue")
+# Add overall title
+title("Fitted Residuals Diagnostics", outer=TRUE)
+par(op)
+```
+
+# Data Forecasting
+
+9. Forecast the next 10 observations using your model.
+```{r}
+# Predict 10 future observations and plot
+mypred <- predict(fit, n.ahead=10)
+ts.plot(dowj, xlim=c(0,89))
+points(79:88,mypred$pred)
+lines(79:88,mypred$pred+1.96*mypred$se,lty=2)
+lines(79:88,mypred$pred-1.96*mypred$se,lty=2)
+```
